@@ -1,0 +1,8 @@
+.dart_tool/
+.packages
+.build/
+.idea/
+.vscode/
+build/
+ios/Pods/
+*.iml
