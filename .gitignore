@@ -11,6 +11,10 @@ android/app/build/
 ios/Pods/
 ios/build/
 
+# Firebase CLI / executables
+firebase.exe
+*.exe
+
 # IDE
 .vscode/
 .idea/
