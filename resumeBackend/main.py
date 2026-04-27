@@ -1,15 +1,78 @@
+from fastapi import FastAPI, UploadFile, File
+from utilz.pdf_parser import extract_text
 from utilz.job_api import fetch_jobs
-from fastapi import FastAPI
-
+from utilz.matcher import match_jobs
+from sklearn.feature_extraction.text import TfidfVectorizer
+from utilz.domain_detector import detect_resume_domains, get_search_query
 app = FastAPI()
+
+
 
 @app.get("/")
 def read_root():
     return {
-        "message": "ResumeBackend API is running",
-        "available_endpoints": ["/test-jobs"]
+        "message": "AI Resume Analyzer API Running"
     }
 
-@app.get("/test-jobs")
-def test_jobs():
-    return fetch_jobs("data analyst")
+
+@app.post("/analyze-resume")
+async def analyze_resume(file: UploadFile = File(...)):
+    contents = await file.read()
+
+    with open(file.filename, "wb") as f:
+        f.write(contents)
+
+    resume_text = extract_text(file.filename)
+
+    top_domains = detect_resume_domains(resume_text)
+
+    all_jobs = []
+    search_queries = []
+
+    for domain in top_domains:
+        query = get_search_query(domain)
+        search_queries.append(query)
+
+        jobs = fetch_jobs(query)
+        all_jobs.extend(jobs)
+
+
+    unique_jobs = []
+    seen_titles = set()
+
+    for job in all_jobs:
+        title = job.get("title", "").lower()
+
+        if title not in seen_titles:
+            seen_titles.add(title)
+            unique_jobs.append(job)
+
+
+    matched_jobs = match_jobs(resume_text, unique_jobs)
+
+    return {
+    "filename": file.filename,
+    "top_domains": top_domains,
+    "search_queries": search_queries,
+    "total_jobs_fetched": len(unique_jobs),
+    "top_matches": matched_jobs
+}
+
+
+def extract_search_keyword(resume_text):
+    documents = [resume_text]
+
+    vectorizer = TfidfVectorizer(
+        stop_words="english",
+        max_features=10
+    )
+
+
+
+    tfidf_matrix = vectorizer.fit_transform(documents)
+
+    keywords = vectorizer.get_feature_names_out()
+
+    search_query = " ".join(keywords[:5])
+
+    return search_query

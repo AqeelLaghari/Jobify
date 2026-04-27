@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:myapp/maindashboard.dart';
 import 'firebase_options.dart';
 import 'register.dart';
 
@@ -83,9 +84,12 @@ class _MyHomePageState extends State<MyHomePage> {
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const MainDashboard()),
+      );
 
       // Success
-      login1();
     } catch (e) {
       login2(); // Show error dialog
     }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -9,6 +10,7 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
@@ -16,48 +18,68 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
 
   Future<void> _register() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-    final confirmPassword = _confirmPasswordController.text.trim();
+  final name = _nameController.text.trim();
+  final email = _emailController.text.trim();
+  final password = _passwordController.text.trim();
+  final confirmPassword = _confirmPasswordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
-      registerbox3();
-      return;
-    }
+  if (name.isEmpty ||
+      email.isEmpty ||
+      password.isEmpty ||
+      confirmPassword.isEmpty) {
+    registerbox3();
+    return;
+  }
 
-    if (password != confirmPassword) {
-      registerbox2();
-      return;
-    }
+  if (password != confirmPassword) {
+    registerbox2();
+    return;
+  }
 
-    setState(() {
-      _isLoading = true;
+  setState(() {
+    _isLoading = true;
+  });
+
+  try {
+    // Create user in Firebase Auth
+    UserCredential userCredential =
+        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+
+    // Get UID
+    String uid = userCredential.user!.uid;
+
+    // Save user data to Firestore
+    await FirebaseFirestore.instance
+        .collection("users")
+        .doc(uid)
+        .set({
+      "name": name,
+      "email": email,
+      "uid": uid,
+      "created_at": Timestamp.now(),
     });
 
-    try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
+    if (mounted) {
+      await registerbox();
+      Navigator.pop(context);
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
       );
-      if (mounted) {
-        registerbox();
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          registerbox();
-        });
-      }
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
+}
 
   Future<void> registerbox2() async {
     return showDialog<void>(
@@ -190,7 +212,18 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
               ),
 
-              const SizedBox(height: 32),
+
+              
+
+              _buildLabel('Full Name'),
+              const SizedBox(height: 8),
+              _buildTextField(
+              controller: _nameController,
+              hintText: 'Enter Full Name',
+              icon: Icons.person,
+              obscureText: false,
+              ),
+const SizedBox(height: 16),
               _buildLabel('Email'),
               const SizedBox(height: 8),
               _buildTextField(
