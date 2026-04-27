@@ -1,0 +1,6 @@
+Flask
+flask-cors
+PyMuPDF
+requests
+scikit-learn
+firebase-admin
