@@ -5,12 +5,132 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+Future<void> openJobLink(BuildContext context, String? urlString) async {
+  if (urlString == null || urlString.isEmpty) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("No link available")));
+    }
+    return;
+  }
+  String url = urlString;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'https://$url';
+  }
+  final uri = Uri.tryParse(url);
+  if (uri == null) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Invalid link")));
+    }
+    return;
+  }
+  debugPrint('Opening URL: $url');
+  try {
+    bool launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched) {
+      launched = await launchUrl(uri);
+    }
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Could not open: $url")));
+    }
+  } catch (e) {
+    debugPrint('launchUrl error: $e');
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
+}
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});
 
   @override
   State<MainDashboard> createState() => _MainDashboardState();
+}
+
+// Separate Favorites Page
+class FavoriteJobsScreen extends StatelessWidget {
+  final List<dynamic> favoriteJobs;
+
+  const FavoriteJobsScreen({super.key, required this.favoriteJobs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          "Favorite Jobs",
+          style: TextStyle(fontFamily: 'Roboto', color: Colors.deepPurple),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
+
+      body: favoriteJobs.isEmpty
+          ? const Center(
+              child: Text(
+                "No favorite jobs yet",
+                style: TextStyle(
+                  fontFamily: 'Roboto',
+                  fontSize: 16,
+                  color: Colors.deepPurple,
+                ),
+              ),
+            )
+          : ListView.builder(
+              itemCount: favoriteJobs.length,
+              itemBuilder: (context, index) {
+                final job = favoriteJobs[index];
+                return Card(
+                  child: ListTile(
+                    title: Text(
+                      job['title'] ?? 'No Title',
+                      style: const TextStyle(
+                        fontFamily: 'Roboto',
+                        fontWeight: FontWeight.w600,
+                        color: Colors.deepPurple,
+                      ),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Match: ${job['match_percentage']}%"),
+                        InkWell(
+                          onTap: () => openJobLink(context, job['link']),
+                          child: Text(
+                            job['link'] ?? 'No link',
+                            style: const TextStyle(
+                              color: Colors.blue,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => JobDetailScreen(job: job),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+    );
+  }
 }
 
 class JobDetailScreen extends StatelessWidget {
@@ -22,25 +142,24 @@ class JobDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Job Details")),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "${job['title']}" ?? 'No Title',
-              style: TextStyle(
+              job['title'] ?? 'No Title',
+              style: const TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
                 color: Colors.deepPurple,
                 fontFamily: 'Roboto',
               ),
             ),
-
             const SizedBox(height: 12),
-            Text(
+            const Text(
               "Description",
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Roboto',
@@ -54,15 +173,7 @@ class JobDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             InkWell(
-              onTap: () async {
-                final urlString = job['link'];
-                if (urlString != null && urlString.isNotEmpty) {
-                  final uri = Uri.parse(urlString);
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  }
-                }
-              },
+              onTap: () => openJobLink(context, job['link']),
               child: Text(
                 job['link'] ?? 'No application link available',
                 style: const TextStyle(
@@ -83,11 +194,55 @@ class _MainDashboardState extends State<MainDashboard> {
   bool isLoading = false;
   List<dynamic> topMatches = [];
   List<dynamic> topDomains = [];
+  List<dynamic> favoriteJobs = [];
 
-  // IMPORTANT:
-  // For Android emulator use: http://10.0.2.2:8000
-  // For real mobile use your PC IP like: http://192.168.1.5:8000
   final String baseUrl = "http://10.0.2.2:8000";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFavorites();
+  }
+
+  Future<void> _loadFavorites() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    if (doc.exists && doc.data() != null) {
+      final data = doc.data()!;
+      if (data.containsKey('favorites')) {
+        setState(() {
+          favoriteJobs = List<dynamic>.from(data['favorites']);
+        });
+      }
+    }
+  }
+
+  Future<void> _saveFavorites() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      'favorites': favoriteJobs,
+    }, SetOptions(merge: true));
+  }
+
+  bool isFavorite(Map<String, dynamic> job) {
+    return favoriteJobs.any((item) => item['title'] == job['title']);
+  }
+
+  void toggleFavorite(Map<String, dynamic> job) {
+    setState(() {
+      if (isFavorite(job)) {
+        favoriteJobs.removeWhere((item) => item['title'] == job['title']);
+      } else {
+        favoriteJobs.add(job);
+      }
+    });
+    _saveFavorites();
+  }
 
   Future<void> pickResume() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -154,6 +309,43 @@ class _MainDashboardState extends State<MainDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.deepPurple),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'favorites') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        FavoriteJobsScreen(favoriteJobs: favoriteJobs),
+                  ),
+                );
+              } else if (value == 'logout') {
+                Navigator.pop(context);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'favorites',
+                child: Text(
+                  'Favorite Jobs',
+                  style: TextStyle(fontFamily: 'Roboto'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'logout',
+                child: Text('Logout', style: TextStyle(fontFamily: 'Roboto')),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -161,17 +353,16 @@ class _MainDashboardState extends State<MainDashboard> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(height: 100),
-              Text(
+              const Text(
                 "welcome to your",
                 style: TextStyle(
                   fontSize: 18,
                   fontFamily: 'Roboto',
                   fontWeight: FontWeight.w400,
-
                   color: Colors.deepPurple,
                 ),
               ),
-              Text(
+              const Text(
                 "Dashboard",
                 style: TextStyle(
                   fontSize: 62,
@@ -181,7 +372,6 @@ class _MainDashboardState extends State<MainDashboard> {
                 ),
               ),
               const SizedBox(height: 20),
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -217,9 +407,8 @@ class _MainDashboardState extends State<MainDashboard> {
                 selectedFile != null ? "Resume Selected" : "No file selected",
               ),
               const SizedBox(height: 30),
-              Align(
+              const Align(
                 alignment: Alignment.centerLeft,
-
                 child: Text(
                   "Recommended Jobs",
                   textAlign: TextAlign.left,
@@ -242,11 +431,21 @@ class _MainDashboardState extends State<MainDashboard> {
 
                           return Card(
                             child: ListTile(
+                              leading: IconButton(
+                                icon: Icon(
+                                  isFavorite(job)
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  color: Colors.deepPurple,
+                                ),
+                                onPressed: () {
+                                  toggleFavorite(job);
+                                },
+                              ),
                               title: Text(
                                 job['title'] ?? 'No Title',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 14,
-
                                   color: Colors.deepPurple,
                                   fontFamily: 'Roboto',
                                 ),
