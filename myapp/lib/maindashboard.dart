@@ -196,6 +196,10 @@ class _MainDashboardState extends State<MainDashboard> {
   List<dynamic> topDomains = [];
   List<dynamic> favoriteJobs = [];
 
+  bool showAnalysis = false;
+  double atsScore = 0;
+  List<String> suggestions = [];
+
   final String baseUrl = "http://10.0.2.2:8000";
 
   @override
@@ -289,6 +293,8 @@ class _MainDashboardState extends State<MainDashboard> {
         setState(() {
           topDomains = data['top_domains'] ?? [];
           topMatches = data['top_matches'] ?? [];
+          atsScore = (data['ats_score'] ?? 0).toDouble();
+          suggestions = List<String>.from(data['suggestions'] ?? []);
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -352,7 +358,7 @@ class _MainDashboardState extends State<MainDashboard> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(height: 100),
+              const SizedBox(height: 50),
               const Text(
                 "welcome to your",
                 style: TextStyle(
@@ -406,64 +412,210 @@ class _MainDashboardState extends State<MainDashboard> {
               Text(
                 selectedFile != null ? "Resume Selected" : "No file selected",
               ),
-              const SizedBox(height: 30),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "Recommended Jobs",
-                  textAlign: TextAlign.left,
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
-                    fontFamily: 'Roboto',
-                  ),
+              const SizedBox(height: 50),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => showAnalysis = false);
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Recommended Jobs",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: showAnalysis
+                                  ? Colors.grey
+                                  : Colors.deepPurple,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                          if (!showAnalysis)
+                            Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              height: 3,
+                              width: 160,
+                              color: Colors.deepPurple,
+                            ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => showAnalysis = true);
+                      },
+                      child: Column(
+                        children: [
+                          Text(
+                            "Resume Analysis",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: showAnalysis
+                                  ? Colors.deepPurple
+                                  : Colors.grey,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                          if (showAnalysis)
+                            Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              height: 3,
+                              width: 140,
+                              color: Colors.deepPurple,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 10),
               Expanded(
-                child: topMatches.isEmpty
-                    ? const Center(child: Text("No recommendations yet"))
-                    : ListView.builder(
-                        itemCount: topMatches.length,
-                        itemBuilder: (context, index) {
-                          final job = topMatches[index];
+                child: showAnalysis
+                    ? SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 🔥 ATS CARD
+                            Container(
+                              width: double.maxFinite,
+                              padding: const EdgeInsets.all(17),
+                              margin: const EdgeInsets.only(
+                                bottom: 20,
+                                top: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.deepPurple,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Column(
+                                children: [
+                                  const Text(
+                                    "ATS Score",
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      letterSpacing: 2,
+                                      color: Colors.white70,
+                                      fontFamily: 'Roboto',
+                                    ),
+                                  ),
 
-                          return Card(
-                            child: ListTile(
-                              leading: IconButton(
-                                icon: Icon(
-                                  isFavorite(job)
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
-                                  color: Colors.deepPurple,
-                                ),
-                                onPressed: () {
-                                  toggleFavorite(job);
-                                },
+                                  Text(
+                                    "${atsScore.toStringAsFixed(1)}%",
+                                    style: const TextStyle(
+                                      fontSize: 42,
+                                      fontWeight: FontWeight(1000),
+                                      color: Colors.white,
+                                      fontFamily: 'Roboto',
+                                    ),
+                                  ),
+                                ],
                               ),
-                              title: Text(
-                                job['title'] ?? 'No Title',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.deepPurple,
-                                  fontFamily: 'Roboto',
-                                ),
+                            ),
+
+                            // 🔥 Suggestions Title
+                            const Text(
+                              "Improvement Suggestions",
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.deepPurple,
+                                fontFamily: 'Roboto',
                               ),
-                              trailing: Text("${job['match_percentage']}%"),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        JobDetailScreen(job: job),
+                            ),
+                            const SizedBox(height: 5),
+
+                            // 🔥 Suggestions List
+                            suggestions.isEmpty
+                                ? const Text("No suggestions available")
+                                : Column(
+                                    children: suggestions.map((s) {
+                                      return Container(
+                                        width: double.infinity,
+                                        margin: const EdgeInsets.symmetric(
+                                          vertical: 5,
+                                        ),
+
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.grey.shade400,
+                                              blurRadius: 2,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+
+                                          color: Colors.grey.shade100,
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+
+                                        child: Text(
+                                          "• $s",
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontFamily: 'Roboto',
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                          ],
+                        ),
+                      )
+                    : (topMatches.isEmpty
+                          ? const Center(child: Text("No recommendations yet"))
+                          : ListView.builder(
+                              itemCount: topMatches.length,
+                              itemBuilder: (context, index) {
+                                final job = topMatches[index];
+
+                                return Card(
+                                  child: ListTile(
+                                    leading: IconButton(
+                                      icon: Icon(
+                                        isFavorite(job)
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
+                                        color: Colors.deepPurple,
+                                      ),
+                                      onPressed: () {
+                                        toggleFavorite(job);
+                                      },
+                                    ),
+                                    title: Text(
+                                      job['title'] ?? 'No Title',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.deepPurple,
+                                        fontFamily: 'Roboto',
+                                      ),
+                                    ),
+                                    trailing: Text(
+                                      "${job['match_percentage']}%",
+                                    ),
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              JobDetailScreen(job: job),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 );
                               },
-                            ),
-                          );
-                        },
-                      ),
+                            )),
               ),
             ],
           ),

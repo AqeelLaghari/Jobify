@@ -4,6 +4,8 @@ from utilz.job_api import fetch_jobs
 from utilz.matcher import match_jobs
 from sklearn.feature_extraction.text import TfidfVectorizer
 from utilz.domain_detector import detect_resume_domains, get_search_query
+from utilz.ats import calculate_ats_score
+
 app = FastAPI()
 
 
@@ -23,6 +25,10 @@ async def analyze_resume(file: UploadFile = File(...)):
         f.write(contents)
 
     resume_text = extract_text(file.filename)
+
+    
+
+
 
     top_domains = detect_resume_domains(resume_text)
 
@@ -49,13 +55,16 @@ async def analyze_resume(file: UploadFile = File(...)):
 
 
     matched_jobs = match_jobs(resume_text, unique_jobs)
+    ats_score, suggestions = calculate_ats_score(resume_text, matched_jobs)
 
     return {
     "filename": file.filename,
     "top_domains": top_domains,
     "search_queries": search_queries,
     "total_jobs_fetched": len(unique_jobs),
-    "top_matches": matched_jobs
+    "top_matches": matched_jobs,
+    "ats_score": ats_score,
+    "suggestions": suggestions
 }
 
 
