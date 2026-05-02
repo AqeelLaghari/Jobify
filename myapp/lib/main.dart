@@ -84,7 +84,11 @@ class _MyHomePageState extends State<MyHomePage> {
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
-      Navigator.push(
+
+      emailController.clear();
+      passwordController.clear();
+
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const MainDashboard()),
       );
@@ -347,5 +351,12 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
   }
 }
