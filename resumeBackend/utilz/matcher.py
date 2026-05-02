@@ -2,45 +2,46 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-
-
 def match_jobs(resume_text, jobs):
     if not jobs:
         return []
 
-    job_descriptions = []
+    
+    job_texts = [
+        f"{job.get('title', '')} {job.get('location', '')}"
+        for job in jobs
+    ]
 
-    for job in jobs:
-        if job.get("description"):
-            job_descriptions.append(job["description"])
+    
+    documents = [resume_text] + job_texts
 
-    if not job_descriptions:
-        return []
-
-    documents = [resume_text] + job_descriptions
-
-    vectorizer = TfidfVectorizer(stop_words="english")
+    
+    vectorizer = TfidfVectorizer(stop_words='english')
     tfidf_matrix = vectorizer.fit_transform(documents)
 
-    similarity_scores = cosine_similarity(
-        tfidf_matrix[0:1],
-        tfidf_matrix[1:]
-    )[0]
+    
+    resume_vector = tfidf_matrix[0]
 
-    matched_jobs = []
+    
+    job_vectors = tfidf_matrix[1:]
 
-    for i, score in enumerate(similarity_scores):
-        matched_jobs.append({
-            "title": jobs[i]["title"],
-            "link": jobs[i]["link"],
-            "match_percentage": round(score * 100, 2)
-        })
+    
+    if job_vectors.shape[0] == 0:
+        return []
 
-    matched_jobs.sort(
+   
+    similarities = cosine_similarity(resume_vector, job_vectors)[0]
+
+    
+    for i, job in enumerate(jobs):
+        job["match_percentage"] = round(similarities[i] * 100, 2)
+
+    
+    sorted_jobs = sorted(
+        jobs,
         key=lambda x: x["match_percentage"],
         reverse=True
     )
 
-    return matched_jobs[:10]
+    # ✅ Return top 10 (or whatever you want)
+    return sorted_jobs[:10]

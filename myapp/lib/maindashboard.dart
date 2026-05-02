@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'main.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -156,20 +157,27 @@ class JobDetailScreen extends StatelessWidget {
                 fontFamily: 'Roboto',
               ),
             ),
-            const SizedBox(height: 12),
-            const Text(
-              "Description",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+
+            Text(
+              "${job['location'] ?? 'Not specified'}",
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
                 fontFamily: 'Roboto',
-                color: Colors.deepPurple,
               ),
             ),
-            const SizedBox(height: 16),
+
+            const SizedBox(height: 10),
+
             Text(
-              job['description'] ?? 'No description available',
-              style: const TextStyle(fontSize: 15),
+              "\$${job['salary'] ?? 'Not disclosed'}",
+
+              style: const TextStyle(
+                fontSize: 20,
+                color: Colors.deepPurple,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Roboto',
+              ),
             ),
             const SizedBox(height: 20),
             InkWell(
@@ -323,7 +331,7 @@ class _MainDashboardState extends State<MainDashboard> {
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
+            onSelected: (value) async {
               if (value == 'favorites') {
                 Navigator.push(
                   context,
@@ -333,7 +341,13 @@ class _MainDashboardState extends State<MainDashboard> {
                   ),
                 );
               } else if (value == 'logout') {
-                Navigator.pop(context);
+                await FirebaseAuth.instance.signOut();
+
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MyHomePage()),
+                  (route) => false,
+                );
               }
             },
             itemBuilder: (context) => const [
