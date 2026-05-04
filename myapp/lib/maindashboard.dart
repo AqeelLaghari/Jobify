@@ -208,7 +208,8 @@ class _MainDashboardState extends State<MainDashboard> {
   double atsScore = 0;
   List<String> suggestions = [];
 
-  final String baseUrl = "http://10.0.2.2:8000";
+  final String baseUrl =
+      "https://jobify.containers.snapdeploy.dev/analyze-resume";
 
   @override
   void initState() {
