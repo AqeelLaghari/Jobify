@@ -63,7 +63,7 @@ async def analyze_resume(file: UploadFile = File(...)):
         search_queries = []
 
         # 🔴 STEP 3: Fetch jobs
-        for domain in top_domains:
+        for domain in top_domains[:2]:  # Limit to top 2 domains for speed
             print(f"⏳ Fetching jobs for {domain}")
             query = get_search_query(domain)
             search_queries.append(query)

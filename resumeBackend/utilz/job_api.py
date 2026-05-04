@@ -10,33 +10,37 @@ def fetch_jobs(keyword):
         "app_id": APP_ID,
         "app_key": APP_KEY,
         "what": keyword,
-        "results_per_page": 20
+        "results_per_page": 10
     }
 
-    response = requests.get(url, params=params)
-    data = response.json()
+    try:
+        response = requests.get(
+            url,
+            params=params,
+            timeout=5   # ✅ CRITICAL FIX
+        )
 
-    jobs = []
+        if response.status_code != 200:
+            print("❌ Adzuna error:", response.status_code)
+            return []
 
-    for job in data.get("results", []):
-        
-        
-        location = job.get("location", {}).get("display_name", "Not specified")
+        data = response.json()
+        jobs = []
 
-        
-        salary_min = job.get("salary_min")
-        salary_max = job.get("salary_max")
+        for job in data.get("results", []):
+            jobs.append({
+                "title": job.get("title"),
+                "location": job.get("location", {}).get("display_name", "N/A"),
+                "salary": job.get("salary_max") or job.get("salary_min") or "Not disclosed",
+                "link": job.get("redirect_url")
+            })
 
-        if salary_min and salary_max:
-            salary = f"{int(salary_min)} - {int(salary_max)}"
-        else:
-            salary = "Not disclosed"
+        return jobs
 
-        jobs.append({
-            "title": job.get("title", "No Title"),
-            "location": location,
-            "salary": salary,
-            "link": job.get("redirect_url", "")
-        })
+    except requests.exceptions.Timeout:
+        print("❌ Adzuna TIMEOUT")
+        return []
 
-    return jobs
+    except Exception as e:
+        print("❌ Adzuna ERROR:", e)
+        return []
