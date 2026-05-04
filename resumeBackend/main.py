@@ -34,78 +34,72 @@ def read_root():
 
 @app.post("/analyze-resume")
 async def analyze_resume(file: UploadFile = File(...)):
+    import time
     start_time = time.time()
 
     try:
-        # ✅ Unique file name
+        print("📥 File received")
+
         unique_filename = f"{uuid.uuid4()}_{file.filename}"
         file_path = os.path.join(UPLOAD_DIR, unique_filename)
 
-        # ✅ Save uploaded file
         contents = await file.read()
         with open(file_path, "wb") as f:
             f.write(contents)
 
-        # ✅ Extract resume text
-        resume_text = extract_text(file_path)
+        print("✅ File saved")
 
-        # ✅ Detect domains
+        # 🔴 STEP 1: PDF extraction
+        print("⏳ Extracting text...")
+        resume_text = extract_text(file_path)
+        print("✅ Text extracted")
+
+        # 🔴 STEP 2: Domains
+        print("⏳ Detecting domains...")
         top_domains = detect_resume_domains(resume_text)
+        print("✅ Domains:", top_domains)
 
         all_jobs = []
         search_queries = []
 
-        # ✅ SAFE job fetching (NO FREEZE)
+        # 🔴 STEP 3: Fetch jobs
         for domain in top_domains:
-            try:
-                query = get_search_query(domain)
-                search_queries.append(query)
+            print(f"⏳ Fetching jobs for {domain}")
+            query = get_search_query(domain)
+            search_queries.append(query)
 
-                jobs = fetch_jobs(query)
+            jobs = fetch_jobs(query)
 
-                if jobs:
-                    all_jobs.extend(jobs)
+            print(f"✅ Jobs fetched: {len(jobs)}")
 
-            except Exception as e:
-                print("❌ Domain fetch error:", e)
-                continue
+            if jobs:
+                all_jobs.extend(jobs)
 
-        # ✅ Remove duplicates
-        unique_jobs = []
-        seen_titles = set()
+        print("✅ Total jobs collected:", len(all_jobs))
 
-        for job in all_jobs:
-            title = job.get("title", "").lower()
-            if title not in seen_titles:
-                seen_titles.add(title)
-                unique_jobs.append(job)
+        # 🔴 STEP 4: Matching
+        print("⏳ Matching jobs...")
+        matched_jobs = match_jobs(resume_text, all_jobs)
+        print("✅ Matching done")
 
-        # ✅ Match jobs
-        matched_jobs = match_jobs(resume_text, unique_jobs)
+        # 🔴 STEP 5: ATS
+        print("⏳ Calculating ATS...")
+        ats_score, suggestions = calculate_ats_score(resume_text, matched_jobs)
+        print("✅ ATS done")
 
-        # ✅ ATS score + suggestions
-        ats_score, suggestions = calculate_ats_score(
-            resume_text, matched_jobs
-        )
-
-        # ✅ Delete file after processing
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        os.remove(file_path)
 
         print("⏱ Total time:", time.time() - start_time)
 
         return {
-            "filename": file.filename,
             "top_domains": top_domains,
-            "search_queries": search_queries,
-            "total_jobs_fetched": len(unique_jobs),
             "top_matches": matched_jobs,
             "ats_score": ats_score,
             "suggestions": suggestions
         }
 
     except Exception as e:
-        print("❌ SERVER ERROR:", e)
+        print("❌ ERROR:", e)
         return {"error": str(e)}
 
 
