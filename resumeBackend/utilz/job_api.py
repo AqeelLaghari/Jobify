@@ -10,7 +10,7 @@ def fetch_jobs(keyword):
         "app_id": APP_ID,
         "app_key": APP_KEY,
         "what": keyword,
-        "results_per_page": 20
+        "results_per_page": 10
     }
 
     headers = {
@@ -22,13 +22,11 @@ def fetch_jobs(keyword):
             url,
             params=params,
             headers=headers,
-            timeout=5   # ✅ CRITICAL FIX (prevents hanging)
+            timeout=5
         )
 
-        print("STATUS:", response.status_code)
-
         if response.status_code != 200:
-            print("API ERROR:", response.text)
+            print("❌ API ERROR:", response.status_code)
             return []
 
         data = response.json()
@@ -39,15 +37,15 @@ def fetch_jobs(keyword):
                 "title": job.get("title"),
                 "link": job.get("redirect_url"),
                 "location": job.get("location", {}).get("display_name", "Unknown"),
-                "salary": str(job.get("salary_min", "N/A")) + " - " + str(job.get("salary_max", "N/A"))
+                "salary": f"{job.get('salary_min', 'N/A')} - {job.get('salary_max', 'N/A')}"
             })
 
         return jobs
 
     except requests.exceptions.Timeout:
-        print("❌ API Timeout")
+        print("❌ API TIMEOUT")
         return []
 
     except Exception as e:
-        print("❌ API Error:", e)
+        print("❌ API ERROR:", e)
         return []
