@@ -1,5 +1,6 @@
 fastapi
 uvicorn
-python-multipart
-scikit-learn
+pdfplumber
 requests
+scikit-learn
+python-multipart
