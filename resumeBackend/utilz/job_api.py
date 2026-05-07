@@ -1,7 +1,7 @@
 import requests
 
-APP_ID = "REMOVED"
-APP_KEY = "REMOVED"
+APP_ID = "b69c4db0"
+APP_KEY = "ee33a282619590bf3364c48e494ad164"
 
 def fetch_jobs(keyword):
     url = "https://api.adzuna.com/v1/api/jobs/us/search/1"

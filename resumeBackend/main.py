@@ -7,14 +7,13 @@ import time
 from utilz.pdf_parser import extract_text
 from utilz.job_api import fetch_jobs
 from utilz.matcher import match_jobs
+from sklearn.feature_extraction.text import TfidfVectorizer
 from utilz.domain_detector import detect_resume_domains, get_search_query
 from utilz.ats import calculate_ats_score
 
 app = FastAPI()
 
-# =========================
-# CORS
-# =========================
+# ✅ CORS (important for Flutter)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,93 +22,51 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# =========================
-# Upload folder
-# =========================
+# ✅ Upload directory
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-# =========================
-# Root Route
-# =========================
 @app.get("/")
 def read_root():
-    return {
-        "message": "AI Resume Analyzer API Running"
-    }
+    return {"message": "AI Resume Analyzer API Running"}
 
 
-# =========================
-# Health Route
-# =========================
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
-
-
-# =========================
-# Analyze Resume
-# =========================
 @app.post("/analyze-resume")
 async def analyze_resume(file: UploadFile = File(...)):
-
+    import time
     start_time = time.time()
-    file_path = None
 
     try:
+        print("📥 File received")
 
-        print("📥 Resume received")
-
-        # =========================
-        # Save PDF
-        # =========================
         unique_filename = f"{uuid.uuid4()}_{file.filename}"
         file_path = os.path.join(UPLOAD_DIR, unique_filename)
 
         contents = await file.read()
-
         with open(file_path, "wb") as f:
             f.write(contents)
 
-        print("✅ PDF saved")
+        print("✅ File saved")
 
-        # =========================
-        # Extract Resume Text
-        # =========================
-        print("⏳ Extracting text from PDF...")
-
+        # 🔴 STEP 1: PDF extraction
+        print("⏳ Extracting text...")
         resume_text = extract_text(file_path)
+        print("✅ Text extracted")
 
-        if not resume_text or len(resume_text.strip()) == 0:
-            return {
-                "error": "Could not extract text from PDF"
-            }
-
-        print("✅ Resume text extracted")
-
-        # =========================
-        # Detect Domains
-        # =========================
-        print("⏳ Detecting resume domains...")
-
+        # 🔴 STEP 2: Domains
+        print("⏳ Detecting domains...")
         top_domains = detect_resume_domains(resume_text)
+        print("✅ Domains:", top_domains)
 
-        print("✅ Domains detected:", top_domains)
-
-        # =========================
-        # Fetch Jobs
-        # =========================
         all_jobs = []
         search_queries = []
 
+        # 🔴 STEP 3: Fetch jobs
         for domain in top_domains:
-
+            print(f"⏳ Fetching jobs for {domain}")
             query = get_search_query(domain)
-
             search_queries.append(query)
-
-            print(f"⏳ Fetching jobs for: {query}")
 
             jobs = fetch_jobs(query)
 
@@ -118,94 +75,45 @@ async def analyze_resume(file: UploadFile = File(...)):
             if jobs:
                 all_jobs.extend(jobs)
 
-        print("✅ Total jobs before cleaning:", len(all_jobs))
+        print("✅ Total jobs collected:", len(all_jobs))
 
-        # =========================
-        # Remove Duplicate Jobs
-        # =========================
-        unique_jobs = []
-        seen_titles = set()
+        # 🔴 STEP 4: Matching
+        print("⏳ Matching jobs...")
+        matched_jobs = match_jobs(resume_text, all_jobs)
+        print("✅ Matching done")
 
-        for job in all_jobs:
+        # 🔴 STEP 5: ATS
+        print("⏳ Calculating ATS...")
+        ats_score, suggestions = calculate_ats_score(resume_text, matched_jobs)
+        print("✅ ATS done")
 
-            title = job.get("title", "")
+        os.remove(file_path)
 
-            # Clean title properly
-            cleaned_title = " ".join(title.split()).strip().lower()
+        print("⏱ Total time:", time.time() - start_time)
 
-            # Skip empty titles
-            if cleaned_title == "":
-                continue
-
-            if cleaned_title not in seen_titles:
-                seen_titles.add(cleaned_title)
-                unique_jobs.append(job)
-
-        print("✅ Unique jobs after cleaning:", len(unique_jobs))
-
-        # =========================
-        # Limit jobs for speed
-        # =========================
-        unique_jobs = unique_jobs[:20]
-
-        # =========================
-        # Match Jobs
-        # =========================
-        print("⏳ Matching jobs with resume...")
-
-        matched_jobs = match_jobs(resume_text, unique_jobs)
-
-        print("✅ Job matching completed")
-
-        # =========================
-        # ATS Score
-        # =========================
-        print("⏳ Calculating ATS score...")
-
-        ats_score, suggestions = calculate_ats_score(
-            resume_text,
-            matched_jobs
-        )
-
-        print("✅ ATS calculation completed")
-
-        # =========================
-        # Total Time
-        # =========================
-        total_time = round(time.time() - start_time, 2)
-
-        print(f"⏱ Completed in {total_time} seconds")
-
-        # =========================
-        # Response
-        # =========================
         return {
-            "filename": file.filename,
             "top_domains": top_domains,
-            "search_queries": search_queries,
-            "total_jobs_fetched": len(unique_jobs),
             "top_matches": matched_jobs,
             "ats_score": ats_score,
-            "suggestions": suggestions,
-            "processing_time": total_time
+            "suggestions": suggestions
         }
 
     except Exception as e:
+        print("❌ ERROR:", e)
+        return {"error": str(e)}
 
-        print("❌ ERROR:", str(e))
 
-        return {
-            "error": str(e)
-        }
+# Optional helper (unchanged)
+def extract_search_keyword(resume_text):
+    documents = [resume_text]
 
-    finally:
+    vectorizer = TfidfVectorizer(
+        stop_words="english",
+        max_features=10
+    )
 
-        # =========================
-        # Delete uploaded file
-        # =========================
-        try:
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
-                print("🗑 Uploaded PDF deleted")
-        except Exception as delete_error:
-            print("❌ File delete error:", delete_error)
+    tfidf_matrix = vectorizer.fit_transform(documents)
+    keywords = vectorizer.get_feature_names_out()
+
+    search_query = " ".join(keywords[:5])
+    return search_query
